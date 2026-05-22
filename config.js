@@ -1,7 +1,7 @@
 window.APP_CONFIG = {
-  apiBaseUrl: "REPLACE_WITH_YOUR_APPS_SCRIPT_WEB_APP_URL",
-  roomId: "family-room-1",
-  secret: "replace-this-shared-secret",
+  apiBaseUrl: "https://script.google.com/macros/s/AKfycbwdgmyr1gysGgg8FSpDNdFsdtIzRoU-LK3LnIat7ZQvrzTBiaSKHK14NfLdlxgYzYRa9Q/exec",
+  roomId: "ryo",
+  secret: "ryo-family-chat-7Qp4Lz9Kc2Vm8Nx1",
   role: "simple",
   pollIntervalMs: 7000,
 };
