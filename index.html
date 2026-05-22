@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f3efe5" />
+    <title>Family Messenger</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Family Messenger</p>
+          <h1 id="screenTitle">かんたんメッセージ</h1>
+        </div>
+        <button id="modeToggle" class="mode-toggle" type="button" aria-live="polite">
+          ノーマルへ
+        </button>
+      </header>
+
+      <section id="statusBanner" class="status-banner" aria-live="polite"></section>
+
+      <main class="chat-layout">
+        <section id="messageList" class="message-list" aria-live="polite"></section>
+
+        <section id="simpleComposer" class="simple-composer">
+          <div id="draftPreview" class="draft-preview hidden">
+            <p class="draft-label">この内容を送りますか？</p>
+            <p id="draftText" class="draft-text"></p>
+            <div class="draft-actions">
+              <button id="confirmDraftButton" class="primary-button" type="button">
+                この内容を送信
+              </button>
+              <button id="cancelDraftButton" class="secondary-button" type="button">
+                取り消し
+              </button>
+            </div>
+          </div>
+
+          <button id="simpleRecordButton" class="record-button" type="button">
+            メッセージ送信
+          </button>
+        </section>
+
+        <section id="normalComposer" class="normal-composer hidden">
+          <label class="field-label" for="messageInput">メッセージ</label>
+          <textarea
+            id="messageInput"
+            class="message-input"
+            rows="4"
+            placeholder="メッセージを入力"
+          ></textarea>
+
+          <div class="normal-actions">
+            <label class="file-picker" for="imageInput">画像を選ぶ</label>
+            <input id="imageInput" type="file" accept="image/*" />
+            <button id="sendTextButton" class="secondary-button" type="button">
+              テキスト送信
+            </button>
+            <button id="sendImageButton" class="primary-button" type="button">
+              画像送信
+            </button>
+          </div>
+          <p id="imageName" class="image-name">画像はまだ選ばれていません</p>
+        </section>
+      </main>
+    </div>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
