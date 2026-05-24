@@ -124,6 +124,9 @@ button {
   background: var(--other);
   align-self: flex-start;
   border: 1px solid var(--other-border);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .message-card.self {

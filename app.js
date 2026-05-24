@@ -2,6 +2,7 @@
   "use strict";
 
   const LONG_PRESS_MS = 700;
+  const LONG_PRESS_MOVE_THRESHOLD = 14;
   const query = new URLSearchParams(window.location.search);
   const defaults = window.APP_CONFIG || {};
   const config = {
@@ -25,6 +26,9 @@
     deviceId: getDeviceId(),
     longPressTimer: null,
     activeLongPressMessageId: "",
+    longPressPointerId: null,
+    longPressStartX: 0,
+    longPressStartY: 0,
   };
 
   const elements = {
@@ -67,9 +71,11 @@
     elements.sendImageButton.addEventListener("click", onSendImage);
     elements.imageInput.addEventListener("change", onImageSelected);
     elements.messageList.addEventListener("pointerdown", onMessagePointerDown);
+    elements.messageList.addEventListener("pointermove", onMessagePointerMove);
     elements.messageList.addEventListener("pointerup", clearLongPress);
     elements.messageList.addEventListener("pointerleave", clearLongPress);
     elements.messageList.addEventListener("pointercancel", clearLongPress);
+    elements.messageList.addEventListener("contextmenu", onMessageContextMenu);
     window.addEventListener("beforeunload", cleanupRecognition);
   }
 
@@ -163,6 +169,9 @@
     }
 
     clearLongPress();
+    state.longPressPointerId = event.pointerId;
+    state.longPressStartX = event.clientX;
+    state.longPressStartY = event.clientY;
     state.activeLongPressMessageId = card.dataset.messageId || "";
     state.longPressTimer = window.setTimeout(function () {
       const message = state.messages.find(function (item) {
@@ -176,12 +185,36 @@
     }, LONG_PRESS_MS);
   }
 
+  function onMessagePointerMove(event) {
+    if (!state.longPressTimer || event.pointerId !== state.longPressPointerId) {
+      return;
+    }
+
+    const movedX = Math.abs(event.clientX - state.longPressStartX);
+    const movedY = Math.abs(event.clientY - state.longPressStartY);
+    if (movedX > LONG_PRESS_MOVE_THRESHOLD || movedY > LONG_PRESS_MOVE_THRESHOLD) {
+      clearLongPress();
+    }
+  }
+
+  function onMessageContextMenu(event) {
+    if (state.mode !== "normal") {
+      return;
+    }
+
+    const card = event.target.closest(".message-card");
+    if (card) {
+      event.preventDefault();
+    }
+  }
+
   function clearLongPress() {
     if (state.longPressTimer) {
       window.clearTimeout(state.longPressTimer);
       state.longPressTimer = null;
     }
     state.activeLongPressMessageId = "";
+    state.longPressPointerId = null;
   }
 
   async function deleteMessage(message) {
@@ -550,7 +583,20 @@
 
   function scheduleScrollToBottom() {
     window.requestAnimationFrame(function () {
-      elements.messageList.scrollTop = elements.messageList.scrollHeight;
+      scrollMessagesToBottom();
+      window.setTimeout(scrollMessagesToBottom, 80);
+    });
+  }
+
+  function scrollMessagesToBottom() {
+    const lastMessage = elements.messageList.lastElementChild;
+    elements.messageList.scrollTop = elements.messageList.scrollHeight;
+    if (lastMessage && typeof lastMessage.scrollIntoView === "function") {
+      lastMessage.scrollIntoView({ block: "end" });
+    }
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: "auto",
     });
   }
 
