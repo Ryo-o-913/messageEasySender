@@ -46,7 +46,6 @@
     messageInput: document.getElementById("messageInput"),
     sendTextButton: document.getElementById("sendTextButton"),
     imageInput: document.getElementById("imageInput"),
-    sendImageButton: document.getElementById("sendImageButton"),
     imageName: document.getElementById("imageName"),
   };
 
@@ -57,6 +56,7 @@
 
     bindEvents();
     applyMode(state.mode);
+    updateNormalSendButton();
     renderMessages();
     fetchMessages({ initial: true });
     startPolling();
@@ -67,8 +67,7 @@
     elements.simpleRecordButton.addEventListener("click", onSimplePrimaryAction);
     elements.confirmDraftButton.addEventListener("click", onConfirmDraft);
     elements.cancelDraftButton.addEventListener("click", onCancelDraft);
-    elements.sendTextButton.addEventListener("click", onSendText);
-    elements.sendImageButton.addEventListener("click", onSendImage);
+    elements.sendTextButton.addEventListener("click", onNormalSend);
     elements.imageInput.addEventListener("change", onImageSelected);
     elements.messageList.addEventListener("pointerdown", onMessagePointerDown);
     elements.messageList.addEventListener("pointermove", onMessagePointerMove);
@@ -409,12 +408,22 @@
     });
   }
 
+  async function onNormalSend() {
+    if (state.selectedImageFile) {
+      await onSendImage();
+      return;
+    }
+
+    await onSendText();
+  }
+
   function onImageSelected(event) {
     const files = event.target.files || [];
     state.selectedImageFile = files[0] || null;
     elements.imageName.textContent = state.selectedImageFile
       ? `選択中: ${state.selectedImageFile.name}`
       : "画像はまだ選ばれていません";
+    updateNormalSendButton();
   }
 
   async function onSendImage() {
@@ -572,6 +581,18 @@
       elements.imageInput.value = "";
       elements.imageName.textContent = "画像はまだ選ばれていません";
     }
+    updateNormalSendButton();
+  }
+
+  function updateNormalSendButton() {
+    if (state.selectedImageFile) {
+      elements.sendTextButton.textContent = "画像送信";
+      elements.sendTextButton.classList.add("is-image-mode");
+      return;
+    }
+
+    elements.sendTextButton.textContent = "テキスト送信";
+    elements.sendTextButton.classList.remove("is-image-mode");
   }
 
   function isOwnMessage(message) {

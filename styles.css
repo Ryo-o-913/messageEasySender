@@ -290,6 +290,11 @@ button {
   color: #fff;
 }
 
+.primary-button.is-image-mode {
+  background: var(--accent);
+  color: #fff;
+}
+
 .secondary-button,
 .file-picker {
   background: var(--accent-soft);
