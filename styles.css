@@ -12,6 +12,7 @@
   --danger-soft: #f8e1db;
   --self: #f8e5d1;
   --other: #ffffff;
+  --other-border: #d6cfbf;
   --shadow: 0 16px 40px rgba(65, 47, 23, 0.12);
   font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
 }
@@ -122,11 +123,17 @@ button {
   box-shadow: var(--shadow);
   background: var(--other);
   align-self: flex-start;
+  border: 1px solid var(--other-border);
 }
 
 .message-card.self {
   align-self: flex-end;
   background: var(--self);
+  border-color: #d8b792;
+}
+
+.message-card.other {
+  align-self: flex-start;
 }
 
 .message-card.simple {
@@ -140,6 +147,13 @@ button {
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.delete-hint {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .message-text {

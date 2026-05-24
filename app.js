@@ -1,6 +1,7 @@
 (function () {
   "use strict";
 
+  const LONG_PRESS_MS = 700;
   const query = new URLSearchParams(window.location.search);
   const defaults = window.APP_CONFIG || {};
   const config = {
@@ -21,6 +22,9 @@
     selectedImageFile: null,
     isSending: false,
     pollTimer: null,
+    deviceId: getDeviceId(),
+    longPressTimer: null,
+    activeLongPressMessageId: "",
   };
 
   const elements = {
@@ -62,6 +66,10 @@
     elements.sendTextButton.addEventListener("click", onSendText);
     elements.sendImageButton.addEventListener("click", onSendImage);
     elements.imageInput.addEventListener("change", onImageSelected);
+    elements.messageList.addEventListener("pointerdown", onMessagePointerDown);
+    elements.messageList.addEventListener("pointerup", clearLongPress);
+    elements.messageList.addEventListener("pointerleave", clearLongPress);
+    elements.messageList.addEventListener("pointercancel", clearLongPress);
     window.addEventListener("beforeunload", cleanupRecognition);
   }
 
@@ -76,6 +84,7 @@
     elements.modeToggle.textContent = isSimple ? "ノーマルへ" : "かんたんへ";
     elements.simpleComposer.classList.toggle("hidden", !isSimple);
     elements.normalComposer.classList.toggle("hidden", isSimple);
+    clearLongPress();
     renderMessages();
   }
 
@@ -87,6 +96,7 @@
       empty.className = "message-meta";
       empty.textContent = "まだメッセージはありません";
       elements.messageList.appendChild(empty);
+      scheduleScrollToBottom();
       return;
     }
 
@@ -94,14 +104,15 @@
 
     state.messages.forEach((message) => {
       const card = document.createElement("article");
-      const isSelf = message.senderRole === state.mode;
+      const isSelf = isOwnMessage(message);
       card.className = [
         "message-card",
-        isSelf ? "self" : "",
+        isSelf ? "self" : "other",
         state.mode === "simple" ? "simple" : "",
       ]
         .filter(Boolean)
         .join(" ");
+      card.dataset.messageId = message.id;
 
       const meta = document.createElement("span");
       meta.className = "message-meta";
@@ -110,12 +121,20 @@
       )}`;
       card.appendChild(meta);
 
+      if (state.mode === "normal") {
+        const hint = document.createElement("span");
+        hint.className = "delete-hint";
+        hint.textContent = "長押しで削除";
+        card.appendChild(hint);
+      }
+
       if (message.type === "image" && message.imageUrl) {
         const image = document.createElement("img");
         image.className = "message-image";
         image.src = message.imageUrl;
         image.alt = "送信された画像";
         image.loading = "lazy";
+        image.addEventListener("load", scheduleScrollToBottom, { once: true });
         card.appendChild(image);
       }
 
@@ -130,7 +149,84 @@
     });
 
     elements.messageList.appendChild(fragment);
-    elements.messageList.scrollTop = elements.messageList.scrollHeight;
+    scheduleScrollToBottom();
+  }
+
+  function onMessagePointerDown(event) {
+    if (state.mode !== "normal") {
+      return;
+    }
+
+    const card = event.target.closest(".message-card");
+    if (!card) {
+      return;
+    }
+
+    clearLongPress();
+    state.activeLongPressMessageId = card.dataset.messageId || "";
+    state.longPressTimer = window.setTimeout(function () {
+      const message = state.messages.find(function (item) {
+        return item.id === state.activeLongPressMessageId;
+      });
+
+      clearLongPress();
+      if (message) {
+        deleteMessage(message);
+      }
+    }, LONG_PRESS_MS);
+  }
+
+  function clearLongPress() {
+    if (state.longPressTimer) {
+      window.clearTimeout(state.longPressTimer);
+      state.longPressTimer = null;
+    }
+    state.activeLongPressMessageId = "";
+  }
+
+  async function deleteMessage(message) {
+    if (state.isSending) {
+      return;
+    }
+
+    const confirmed = window.confirm("このメッセージを削除しますか？");
+    if (!confirmed) {
+      return;
+    }
+
+    state.isSending = true;
+    setStatus("削除しています...");
+
+    try {
+      const response = await fetch(config.apiBaseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify({
+          action: "delete",
+          roomId: config.roomId,
+          secret: config.secret,
+          messageId: message.id,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "削除に失敗しました。");
+      }
+
+      state.messages = state.messages.filter(function (item) {
+        return item.id !== message.id;
+      });
+      state.lastSeenAt = state.messages.length ? state.messages[state.messages.length - 1].createdAt : "";
+      renderMessages();
+      setStatus("削除しました。", "success");
+    } catch (error) {
+      setStatus(error.message || "削除に失敗しました。", "error");
+    } finally {
+      state.isSending = false;
+    }
   }
 
   function onSimplePrimaryAction() {
@@ -257,10 +353,6 @@
       text: state.pendingTranscript,
       senderRole: "simple",
     });
-
-    state.pendingTranscript = "";
-    elements.draftText.textContent = "";
-    elements.draftPreview.classList.add("hidden");
   }
 
   function onCancelDraft() {
@@ -277,21 +369,19 @@
       return;
     }
 
-    const success = await sendMessage({
+    await sendMessage({
       type: "text",
-      text,
+      text: text,
       senderRole: "normal",
     });
-
-    if (success) {
-      elements.messageInput.value = "";
-    }
   }
 
   function onImageSelected(event) {
-    const [file] = event.target.files || [];
-    state.selectedImageFile = file || null;
-    elements.imageName.textContent = file ? `選択中: ${file.name}` : "画像はまだ選ばれていません";
+    const files = event.target.files || [];
+    state.selectedImageFile = files[0] || null;
+    elements.imageName.textContent = state.selectedImageFile
+      ? `選択中: ${state.selectedImageFile.name}`
+      : "画像はまだ選ばれていません";
   }
 
   async function onSendImage() {
@@ -301,20 +391,14 @@
     }
 
     const imageData = await fileToDataUrl(state.selectedImageFile);
-    const success = await sendMessage({
+    await sendMessage({
       type: "image",
       text: "",
       senderRole: "normal",
-      imageData,
+      imageData: imageData,
       fileName: state.selectedImageFile.name,
       mimeType: state.selectedImageFile.type || "image/jpeg",
     });
-
-    if (success) {
-      state.selectedImageFile = null;
-      elements.imageInput.value = "";
-      elements.imageName.textContent = "画像はまだ選ばれていません";
-    }
   }
 
   async function sendMessage(payload) {
@@ -336,6 +420,7 @@
           roomId: config.roomId,
           secret: config.secret,
           clientTimestamp: new Date().toISOString(),
+          senderId: state.deviceId,
           ...payload,
         }),
       });
@@ -350,6 +435,7 @@
       }
 
       setStatus("送信しました。", "success");
+      clearComposerState(payload.senderRole, payload.type);
       await fetchMessages();
       return true;
     } catch (error) {
@@ -410,9 +496,12 @@
       return;
     }
 
-    const byId = new Map(state.messages.map((message) => [message.id, message]));
-    incomingMessages.forEach((message) => {
-      byId.set(message.id, message);
+    const byId = new Map(state.messages.map(function (message) {
+      return [message.id, message];
+    }));
+
+    incomingMessages.forEach(function (message) {
+      byId.set(message.id, normalizeMessage(message));
     });
 
     state.messages = Array.from(byId.values()).sort(function (left, right) {
@@ -420,6 +509,49 @@
     });
     state.lastSeenAt = state.messages[state.messages.length - 1].createdAt;
     renderMessages();
+  }
+
+  function normalizeMessage(message) {
+    return {
+      id: String(message.id || ""),
+      roomId: String(message.roomId || ""),
+      senderRole: String(message.senderRole || ""),
+      senderId: String(message.senderId || ""),
+      type: String(message.type || "text"),
+      text: String(message.text || ""),
+      imageUrl: String(message.imageUrl || ""),
+      createdAt: String(message.createdAt || ""),
+    };
+  }
+
+  function clearComposerState(senderRole, type) {
+    if (senderRole === "simple") {
+      state.pendingTranscript = "";
+      elements.draftText.textContent = "";
+      elements.draftPreview.classList.add("hidden");
+      cleanupRecognition();
+      return;
+    }
+
+    elements.messageInput.value = "";
+    if (type === "image") {
+      state.selectedImageFile = null;
+      elements.imageInput.value = "";
+      elements.imageName.textContent = "画像はまだ選ばれていません";
+    }
+  }
+
+  function isOwnMessage(message) {
+    if (message.senderId) {
+      return message.senderId === state.deviceId;
+    }
+    return message.senderRole === state.mode;
+  }
+
+  function scheduleScrollToBottom() {
+    window.requestAnimationFrame(function () {
+      elements.messageList.scrollTop = elements.messageList.scrollHeight;
+    });
   }
 
   function setStatus(message, tone) {
@@ -458,6 +590,25 @@
       };
       reader.readAsDataURL(file);
     });
+  }
+
+  function getDeviceId() {
+    const storageKey = "messageEasySenderDeviceId";
+    try {
+      const existingId = window.localStorage.getItem(storageKey);
+      if (existingId) {
+        return existingId;
+      }
+
+      const newId =
+        window.crypto && typeof window.crypto.randomUUID === "function"
+          ? window.crypto.randomUUID()
+          : "device-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+      window.localStorage.setItem(storageKey, newId);
+      return newId;
+    } catch (error) {
+      return "device-memory-" + Math.random().toString(16).slice(2);
+    }
   }
 
   init();
